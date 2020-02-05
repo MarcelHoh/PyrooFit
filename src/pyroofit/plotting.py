@@ -23,14 +23,8 @@ from uncertainties import ufloat
 from uncertainties import unumpy as unp
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import NullFormatter
+#from matplotlib.ticker import NullFormatter
 import matplotlib
-
-DEFAULT_PALETTE = [1, ROOT.kRed - 7, ROOT.kAzure + 5, ROOT.kGreen-2,  ROOT.kMagenta+1, ROOT.kYellow]
-DEFAULT_STYLES = [0, 1001, 3004,  3005, 3009, 3006]
-""" Default color pallette and draw style for ROOT.
-
-"""
 
 
 class Plotter(ClassLoggingMixin):
@@ -91,45 +85,14 @@ def round_to_1(x):
     return round(x, -int(floor(log10(abs(x)))))
 
 
-def set_root_style(font_scale=1.0, label_scale=1.0):
-    """  Setting a general style that one can look at plots without getting eye-cancer.
-
-    Args:
-        font_scale (float): Scale of the fonts
-        label_scale (float): Scale of the labels
-
-    Todo:
-        * Absolute font size
-
-    """
-    ROOT.gStyle.SetOptTitle(0)
-    ROOT.gStyle.SetOptStat(0)
-    ROOT.gStyle.SetLabelSize(0.04*label_scale, "xy")
-    ROOT.gStyle.SetLabelOffset(0.006, "y")
-    ROOT.gStyle.SetTitleSize(0.06*font_scale, "xy")
-    ROOT.gStyle.SetTitleOffset(0.9, "x")
-    ROOT.gStyle.SetTitleOffset(1.15, "y")
-    ROOT.gStyle.SetNdivisions(505, "x")
-
-    ROOT.gStyle.SetPadLeftMargin(0.14)
-    ROOT.gStyle.SetPadRightMargin(0.05)
-    ROOT.gStyle.SetPadBottomMargin(0.12)
-    ROOT.gStyle.SetPadTopMargin(0.05)
-
-    ROOT.gStyle.SetFillColor(10)
-    ROOT.gStyle.SetMarkerSize(0.8)
-    ROOT.gStyle.SetLineColor(ROOT.kBlack)
-    ROOT.gStyle.SetLineWidth(1)
-
-    ROOT.gStyle.SetLegendBorderSize(0)
 
 
-
-def py_plot(model, data, observable, filename, components=None, title = None,
-            nbins = None, round_bins = 5,
+def py_plot(model, data, observable, filename=None, components=None, title = None,
+            nbins = None, round_bins = 5, legend = True,
             legend_kwargs = {}, figure_kwargs = {}, title_kwargs = {},
             xlabel_kwargs = {}, pull_ylabel_kwargs = {}, ylabel_kwargs = {},
-            legend_data_name="Data", legend_fit_name="Fit"):
+            legend_data_name="Data", legend_fit_name="Fit",
+            fit_color = 'black', data_color = 'black', show=False):
     """ Generic plot function.
 
     Args:
@@ -154,6 +117,7 @@ def py_plot(model, data, observable, filename, components=None, title = None,
         legend_fit_name (str):
             name of the total fit in the plot
     """
+
     nbins = get_optimal_bin_size(data.numEntries(), round_bins) if nbins is None else nbins
 
     if isinstance(data, ROOT.RooDataHist):
@@ -193,7 +157,7 @@ def py_plot(model, data, observable, filename, components=None, title = None,
 
     data_plot = ax_hist.errorbar(bin_centers, unp.nominal_values(data_uarray),
                                  yerr=unp.std_devs(data_uarray), xerr= bin_widths / 2,
-                                 color='black', fmt='.', capthick=0.0, lw=2.0)
+                                 color=data_color, fmt='.', capthick=0.0, lw=2.0)
 
     legend_handles.append(data_plot)
     legend_labels.append(legend_data_name)
@@ -207,7 +171,7 @@ def py_plot(model, data, observable, filename, components=None, title = None,
             hx, hy = component.get_curve(observable.GetName(), npoints_curve)
             hy    *= component.ni.n / nbins
 
-            component.plot = ax_hist.plot(hx, hy, color=component.color)
+            component.plot = ax_hist.plot(hx, hy, color=component.color, **component.plot_kwargs)
             component.fill_plot = None
 
             if component.color == None:
@@ -217,7 +181,7 @@ def py_plot(model, data, observable, filename, components=None, title = None,
                 component.face_color = component.color
                 component.edge_color = component.color
 
-                #alternative for hatch is a string '/' not True
+                #alternative for hatch is a string (ex. '/') not True
                 if component.hatch != False and not component.fill:
                     component.face_color = "None"
                 if component.hatch == False and component.fill:
@@ -225,15 +189,12 @@ def py_plot(model, data, observable, filename, components=None, title = None,
 
                 component.fill_plot = ax_hist.fill_between(hx, np.zeros(len(hy)), hy,
                 facecolor=component.face_color, edgecolor = component.edge_color,
-                alpha=component.fill_alpha, hatch=component.hatch)
+                alpha=component.fill_alpha, hatch=component.hatch, **component.fill_kwargs)
                 legend_handles.append( (component.plot[0], component.fill_plot) )
             else:
                 legend_handles.append(component.plot[0])
 
             legend_labels.append(component.title)
-
-        print(np.sum([x.ni for x,y in components]))
-        print(data_uarray.sum())
 
     #total pdf - essentially a copy paste from pdf.get_curve
     h = model.createHistogram(observable.GetName(), npoints_curve)
@@ -244,11 +205,14 @@ def py_plot(model, data, observable, filename, components=None, title = None,
     #normalise to the sum of events in plot as per the roofit manual page 12
     #Note that the normalization of the PDF, which has an intrinsic normalization to unity by definition, is automatically adjusted to the number of events in the plot.
     total_hy = np.array(total_hy * data_uarray.sum().n )/ nbins
-    total_fit_plot = ax_hist.plot(total_hx, total_hy, color='black')
+    total_fit_plot = ax_hist.plot(total_hx, total_hy, color=fit_color)
     legend_handles.append(total_fit_plot[0])
     legend_labels.append(legend_fit_name)
 
-    ax_hist.legend(legend_handles, legend_labels, **legend_kwargs)
+    if legend:
+        ax_hist.legend(legend_handles, legend_labels, **legend_kwargs)
+
+    #remove the extra space pyplot adds to the side
     ax_hist.set_ylim(bottom=0)
     ax_hist.set_xlim(observable.getMin(), observable.getMax())
 
@@ -262,25 +226,27 @@ def py_plot(model, data, observable, filename, components=None, title = None,
         else:
             fillBetweenBins.append(bins[i])
             fillBetweenBins.append(bins[i])
-    plt.axhline(0,color='grey', ls=':')
+
+    plt.axhline(0,color='gray', ls=':')
     fillBetweenPlotSet = []
     for i in range(len(pull)):
         fillBetweenPlotSet.append(pull[i])
         fillBetweenPlotSet.append(pull[i])
 
-    ax_pull.fill_between(fillBetweenBins, 0, fillBetweenPlotSet, facecolor='lightgray', alpha=1)
+    ax_pull.fill_between(fillBetweenBins, 0, fillBetweenPlotSet, facecolor='lightgray', edgecolor='lightgray', alpha=1)
     ax_pull.errorbar(bin_centers, pull, xerr= bin_widths/2, fmt='.',color='Black', lw=1.0, capthick = 0)#, xerr=binHalfWidths)
     ax_pull.grid()
+
     pull_low, pull_up = ax_pull.get_ylim()
-    if pull_low > -2: pull_low = -2
-    if pull_up  <  2: pull_up  =  2
+    if pull_low > -2: pull_low = -2.1
+    if pull_up  <  2: pull_up  =  2.1
     ax_pull.set_ylim(pull_low, pull_up)
 
     # Titles and labels
-    ax_hist.set_title(title,**title_kwargs)
-    ax_pull.set_xlabel(observable.GetTitle(), **xlabel_kwargs)#, ha='right', x=1.0)
+    ax_hist.set_title(title, **title_kwargs)
+    ax_pull.set_xlabel("%s [%s]" % (observable.GetTitle(),observable.getUnit()), **xlabel_kwargs)#, ha='right', x=1.0)
     ylabel_pull = ax_pull.set_ylabel('Pull', *pull_ylabel_kwargs)
-    ylabel_hist = ax_hist.set_ylabel('Events / %.4f' % min(bin_widths), **ylabel_kwargs)
+    ylabel_hist = ax_hist.set_ylabel('Events / (%.3f %s)' % (min(bin_widths),observable.getUnit()), **ylabel_kwargs)
 
     #align the y labels - crude but works for now. align_ylabels only works with gridspec
     plt.gcf().canvas.draw()
@@ -290,267 +256,9 @@ def py_plot(model, data, observable, filename, components=None, title = None,
     ax_hist.yaxis.set_label_coords(new_label_xcoord,ylabel_hist.get_position()[1])
     ax_pull.yaxis.set_label_coords(new_label_xcoord,ylabel_pull.get_position()[1])
 
-    plt.show()
+    if filename != None:
+        plt.savefig(filename, bbox_inches='tight')
+    if show:
+        plt.show()
 
-
-def fast_plot(model, data, observable, filename, components=None, nbins=None, extra_info=None,  size=1280,
-              average=True, pi_label=False, font_scale=1.0, label_scale=1.0,
-              legend=False, extra_text=None, round_bins=5, tick_len=30, model_range="Full",
-              color_cycle=DEFAULT_PALETTE, fill_cycle=DEFAULT_STYLES, lw=2, line_shade=0, legend_data_name="Data", legend_fit_name="Fit",
-              ):
-    """ Generic plot function
-
-    Args:
-        model (RooAbsPDF):
-            Fit model to be drawn
-        data (RooDataSet):
-            Dataset to be plotted
-        observable (RooAbsVar):
-            Observable to be drawn
-        filename (str):
-            Name of the output file. Suffix determines file type
-        components (list of tuples):
-            Normalisation and ROOT.RooAbsPDF to be drawn searately
-        nbins (int):
-            Number of bins
-        extra_info (list or TPaveText):
-        lw (int):
-            Width of the line of the total fit model
-        size (int):
-            Plot size in pixels
-        average (bool):
-            Average bin content for calculating the pull distribution, if false, take central value
-        pi_label (bool):
-            Calculate the bin count in radians
-        font_scale (float):
-            Set relative font scale
-        label_scale (float):
-            Set relative lable scale
-        color_cycle (list of ROOT.TColor):
-            Overwrite for the default color cycle
-        fill_cycle (list of ROOT.TAttrFill):
-            Overwrite for the default fill cycle
-        line_shade (int):
-            Integer to add to the color cycle for the fill color
-        legend (list):
-            Vector with four coordinates for the TLegend position
-        extra_text (list of ROOT.TPaveText or ROOT.TPaveText):
-            Extra text to be drawn on the plot
-        round_bins (int) :
-            magic to for automatically choosing the bin numbers
-        tick_len (int) :
-            Sets the length of the bins, EQUALLY (yes root. this is possible.), choose between 0-100
-        legend_data_name (str):
-            Name of the data part in the fit plot
-        legend_fit_name (str):
-            name of the total fit in the plot
-
-    Todo:
-        * Change or remove extra_info
-    """
-
-    set_root_style(font_scale, label_scale)
-
-    nbins = get_optimal_bin_size(data.numEntries(), round_bins) if nbins is None else nbins
-
-    if isinstance(data, ROOT.RooDataHist):
-        nbins = observable.getBins()
-
-    frame = observable.frame(ROOT.RooFit.Title("Fit Result"), ROOT.RooFit.Bins(nbins))
-    if isinstance(legend, list):
-        assert len(legend) == 4, "Please provide four coordinates for the legend"
-        leg = ROOT.TLegend(*legend)
-    elif legend == "top left":
-        leg = ROOT.TLegend(0.16, 0.78, 0.39, 0.92)
-    else:
-        leg = ROOT.TLegend(0.7, 0.78, 0.93, 0.92)
-
-    data.plotOn(frame, ROOT.RooFit.Name("Data"), ROOT.RooFit.DataError(ROOT.RooAbsData.SumW2))
-    leg.AddEntry(frame.findObject("Data"), legend_data_name, "LEP")
-
-    model.plotOn(frame, ROOT.RooFit.Name("Model"), ROOT.RooFit.LineColor(color_cycle[0]), ROOT.RooFit.Range(model_range))
-    leg.AddEntry(frame.findObject("Model"), legend_fit_name, "L")
-
-    if components is not None:
-        n_col = 1
-        for c, ni in components:
-            c.plotOn(frame,
-                     ROOT.RooFit.LineColor(color_cycle[n_col] + line_shade),
-                     ROOT.RooFit.Normalization(ni, 2),
-                     ROOT.RooFit.FillColor(color_cycle[n_col]),
-                     ROOT.RooFit.FillStyle(fill_cycle[n_col]),
-                     ROOT.RooFit.Name(c.GetName()),
-                     ROOT.RooFit.DrawOption("F"),
-                     ROOT.RooFit.Range(model_range),
-                     )
-            leg.AddEntry(frame.findObject(c.GetName()), c.getTitle().Data())
-            c.plotOn(frame,
-                     ROOT.RooFit.LineColor(color_cycle[n_col] + line_shade),
-                     ROOT.RooFit.Normalization(ni, 2),
-                     ROOT.RooFit.FillColor(color_cycle[n_col]),
-                     ROOT.RooFit.LineWidth(lw),
-                     ROOT.RooFit.Range(model_range),
-                     )  # ROOT.RooFit.DrawOption("F")) #4050
-
-            n_col += 1
-
-    model.plotOn(frame, ROOT.RooFit.Name("Model"), ROOT.RooFit.LineColor(color_cycle[0]))
-    data.plotOn(frame, ROOT.RooFit.Name("Data"), ROOT.RooFit.DataError(ROOT.RooAbsData.SumW2))
-
-    # Create Canvas
-    canvas = ROOT.TCanvas("plot", "plot", size, size)
-    canvas.Divide(1, 2)
-    canvas.GetPad(1).SetPad(0.0, 0.25, 1, 1)
-    canvas.GetPad(1).SetBottomMargin(0.02)
-    canvas.GetPad(1).SetRightMargin(0.05)
-    canvas.GetPad(1).SetTicks(1, 1)
-    canvas.GetPad(2).SetPad(0.0, 0.0, 1, 0.25)
-    canvas.GetPad(2).SetBottomMargin(0.36)
-    canvas.GetPad(2).SetTopMargin(0.0)
-    canvas.GetPad(2).SetRightMargin(0.05)
-    canvas.GetPad(2).SetTicks(1, 1)
-
-    # Pi label because of...
-    if pi_label:
-        pifactor = 1 if observable.getMax() > 1.9 else 2
-        ylabel = "Events / ( %.2f #pi rad )" % (1.0 / float(pifactor * nbins))
-        frame.SetYTitle(ylabel)
-    else:
-        obs_range = round_to_1(observable.getMax() - observable.getMin())  # stupid overflow artefacts
-        div = round(nbins/obs_range)
-        # print(div,obs_range,numbins)
-        unit = observable.getUnit()
-        if unit is not None or unit is not "":
-            ylabel = "Events / ( %s / %d )" % (observable.getUnit(), div)
-            # frame.SetYTitle(ylabel)
-
-    # Draw All The Stuff
-    canvas.cd(1)
-    frame.Draw()
-    if legend is not False:
-        leg.Draw("same")
-
-    # Draw Pull
-    canvas.cd(2)
-    pulls = frame.pullHist("Data", "Model", average)
-    plot_pulls = observable.frame(ROOT.RooFit.Name("Pull_distribution"),
-                                  ROOT.RooFit.Title("Pull distribution"),
-                                  ROOT.RooFit.Range("full_range"))
-
-    hist_pulls = ROOT.TH1F("hist_pulls", "hist pulls", pulls.GetN(),
-                           # pulls.GetXaxis().GetXmin(), pulls.GetXaxis().GetXmax())
-                           observable.getMin(model_range), observable.getMax(model_range))
-    # hist_pulls = ROOT.TH1F("hist_pulls", "hist pulls", nbins,
-    #                        observable.getMin("full_range"), observable.getMax("full_range"))
-
-    pull_values = pulls.GetY()
-    xerr = (observable.getMax("full_range") - observable.getMin("full_range")) / (2. * nbins)  # numbins
-
-    for i in range(pulls.GetN()):
-        hist_pulls.SetBinContent(i + 1, pull_values[i])
-        pulls.SetPointEXlow(i, xerr)
-        pulls.SetPointEXhigh(i, xerr)
-
-        pulls.SetPointEYlow(i, 0)
-        pulls.SetPointEYhigh(i, 0)
-
-    plot_pulls.addPlotable(pulls, "PE1")
-
-    # Messy
-    plot_pulls.GetYaxis().SetTitle("Pull")
-    plot_pulls.GetYaxis().CenterTitle()
-    plot_pulls.GetXaxis().SetTitleSize(0.18)
-    plot_pulls.GetYaxis().SetTitleSize(0.18)
-    plot_pulls.GetYaxis().SetTitleOffset(0.39)
-    plot_pulls.GetXaxis().SetTitleOffset(.82)
-    # plot_pulls.GetXaxis().SetTitleOffset(0.2)
-    plot_pulls.GetXaxis().SetLabelSize(0.12 * label_scale)
-    plot_pulls.GetYaxis().SetLabelSize(0.12 * label_scale)
-    # plot_pulls.GetYaxis().SetLabelOffset(0.0)
-    plot_pulls.GetYaxis().SetLabelOffset(0.006)
-    # plot_pulls.GetXaxis().SetLabelOffset(0.06)
-    plot_pulls.GetXaxis().SetTickLength(plot_pulls.GetXaxis().GetTickLength() * 3.0)
-    plot_pulls.GetYaxis().SetNdivisions(505)
-
-    ### Equal sized ticks!!
-    pad1 = canvas.GetPad(1)
-    pad2 = canvas.GetPad(2)
-
-    pad1W = pad1.GetWw() * pad1.GetAbsWNDC()
-    pad1H = pad1.GetWh() * pad1.GetAbsHNDC()
-    pad2W = pad2.GetWw() * pad2.GetAbsWNDC()
-    pad2H = pad2.GetWh() * pad2.GetAbsHNDC()
-
-    # print(pad1W, pad1H, pad2W, pad2H)
-
-    frame.SetTickLength(tick_len/pad1W, "Y")
-    frame.SetTickLength(tick_len/pad1H, "X")
-
-    plot_pulls.SetTickLength(tick_len/pad1H, "Y")
-    plot_pulls.SetTickLength(tick_len/pad2H, "X")
-
-    frame.GetXaxis().SetLabelOffset(999)
-    frame.GetXaxis().SetLabelSize(0)
-
-    # set reasonable limits for the pull plots
-    if hist_pulls.GetMaximum() > 3.5 or hist_pulls.GetMinimum() < -3.5:
-        plot_pulls.SetMinimum(-5.5)
-        plot_pulls.SetMaximum(5.5)
-    else:
-        plot_pulls.SetMinimum(-3.5)
-        plot_pulls.SetMaximum(3.5)
-    plot_pulls.SetMarkerStyle(6)
-    plot_pulls.SetMarkerColor(0)  # This has to be the worst solution
-    plot_pulls.Draw("")
-    if model_range is "Full":
-        hist_pulls.SetFillColor(33)
-        hist_pulls.SetLineColor(33)
-        hist_pulls.Draw("HISTsame")
-    plot_pulls.Draw("Xsame")
-
-    line = ROOT.TLine(observable.getMin('Full'), 0, observable.getMax("Full"), 0)
-    line.SetLineColor(1)
-    line.SetLineStyle(2)
-    line.Draw("same")
-
-    if extra_text is not None:
-        canvas.cd(1)
-        if isinstance(extra_text, ROOT.TPaveText):
-            extra_info.Draw("Same")
-        if isinstance(extra_text, list):
-            for txt in extra_text:
-                assert isinstance(txt, ROOT.TPaveText), "Please provide extra_txt with a list or ROOT.TPaveText"
-                txt.Draw("Same")
-
-    if extra_info is not None:
-        canvas.cd(1)
-        if isinstance(extra_info, ROOT.TPaveText):
-            extra_info.Draw("Same")
-        else:
-            assert isinstance(extra_info, list), "Please provide extra_info with a list or ROOT.TPaveText"
-            box = ROOT.TPaveText(0.2, 0.75, 0.4, 0.9, "NDC")
-            box.SetFillColor(10)
-            box.SetBorderSize(0)
-            box.SetTextAlign(12)
-            box.SetTextSize(0.04)
-            box.SetFillStyle(1001)
-            box.SetFillColor(10)
-            for info in extra_info:
-                try:
-                    if not isinstance(info, list):
-                        if isinstance(info, ROOT.TPaveText):
-                            info.Draw('same')
-                        else:
-                            info = [info]
-                    if len(info) == 1:
-                        box.AddText(info[0])
-                    elif len(info) == 3:
-                        box.AddText(info[0] + ' = %.2f #pm %.2f' % (info[1], info[2]))
-                    else:
-                        print("Could not add to legend ", info)
-                except IndexError:
-                    print("Something went wrong in plotting")
-
-            box.Draw("same")
-
-    canvas.SaveAs(filename)
+    return

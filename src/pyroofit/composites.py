@@ -18,7 +18,7 @@ import ROOT
 from .pdf import PDF
 from .utilities import AttrDict, is_iterable
 from .observables import create_roo_variable
-from .plotting import fast_plot, py_plot
+from .plotting import py_plot
 from .data import df2roo
 
 
@@ -223,8 +223,7 @@ class AddPdf(PDF):
                 add_components.append((pdf, sig_norm))
             components = add_components
 
-        #fast_plot(self.roo_pdf, data, observable, filename, components=components, *args, **kwargs)
-        py_plot(self.roo_pdf, data, observable, filename, components=components)
+        py_plot(self.roo_pdf, data, observable, filename, components=components, *args, **kwargs)
 
 
 class ProdPdf(PDF):

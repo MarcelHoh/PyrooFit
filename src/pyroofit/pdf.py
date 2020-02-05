@@ -30,7 +30,7 @@ import ROOT
 
 from .utilities import ClassLoggingMixin, AttrDict
 from .data import df2roo
-from .plotting import fast_plot, py_plot
+from .plotting import py_plot
 from .observables import create_roo_variable
 
 
@@ -53,7 +53,7 @@ class PDF(ClassLoggingMixin, object):
     """
 
     def __init__(self, name, observables=None, color=None, fill=False, hatch=False,
-     fill_alpha = 1.0, title=None, **kwds):
+     fill_alpha = 1.0, fill_kwargs = {}, plot_kwargs = {}, title=None, **kwds):
         """ Init of the PDF class
 
         Args:
@@ -102,8 +102,10 @@ class PDF(ClassLoggingMixin, object):
         #plotting options
         self.color = color
         self.fill  = fill
-        self.hatch  = hash
+        self.hatch  = hatch
         self.fill_alpha = fill_alpha
+        self.plot_kwargs = plot_kwargs
+        self.fill_kwargs = fill_kwargs
 
     def __call__(self):
         """ Call overwrite
@@ -312,8 +314,8 @@ class PDF(ClassLoggingMixin, object):
         """
         if data is None:
             data = self.last_data
-        #fast_plot(self.roo_pdf, data, observable, filename, *args, **kwargs)
-        py_plot(self.roo_pdf, data, observable, filename)
+
+        py_plot(self.roo_pdf, data, observable, filename, *args, **kwargs)
 
     def _get_var(self, v, as_ufloat=False):
         """ Internal getter for parameter values
