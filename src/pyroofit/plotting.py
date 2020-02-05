@@ -206,9 +206,30 @@ def py_plot(model, data, observable, filename, components=None, title = None,
             print(component.ni)
             hx, hy = component.get_curve(observable.GetName(), npoints_curve)
             hy    *= component.ni.n / nbins
-            component.plot = ax_hist.plot(hx, hy)
 
-            legend_handles.append(component.plot[0])
+            component.plot = ax_hist.plot(hx, hy, color=component.color)
+            component.fill_plot = None
+
+            if component.color == None:
+                component.color = component.plot[0].get_color()
+
+            if component.fill or component.hatch != False:
+                component.face_color = component.color
+                component.edge_color = component.color
+
+                #alternative for hatch is a string '/' not True
+                if component.hatch != False and not component.fill:
+                    component.face_color = "None"
+                if component.hatch == False and component.fill:
+                    component.edge_color = "None"
+
+                component.fill_plot = ax_hist.fill_between(hx, np.zeros(len(hy)), hy,
+                facecolor=component.face_color, edgecolor = component.edge_color,
+                alpha=component.fill_alpha, hatch=component.hatch)
+                legend_handles.append( (component.plot[0], component.fill_plot) )
+            else:
+                legend_handles.append(component.plot[0])
+
             legend_labels.append(component.title)
 
         print(np.sum([x.ni for x,y in components]))
@@ -258,10 +279,16 @@ def py_plot(model, data, observable, filename, components=None, title = None,
     # Titles and labels
     ax_hist.set_title(title,**title_kwargs)
     ax_pull.set_xlabel(observable.GetTitle(), **xlabel_kwargs)#, ha='right', x=1.0)
-    ax_pull.set_ylabel('Pull', *pull_ylabel_kwargs)
-    ax_hist.set_ylabel('Events / %.4f' % min(bin_widths), **ylabel_kwargs)
+    ylabel_pull = ax_pull.set_ylabel('Pull', *pull_ylabel_kwargs)
+    ylabel_hist = ax_hist.set_ylabel('Events / %.4f' % min(bin_widths), **ylabel_kwargs)
 
-
+    #align the y labels - crude but works for now. align_ylabels only works with gridspec
+    plt.gcf().canvas.draw()
+    new_label_xcoord = np.min([x for x,y in [ylabel_hist.get_position(), ylabel_pull.get_position()]])
+    fig_size = fig.get_size_inches()*fig.dpi # size in pixels
+    new_label_xcoord /= fig_size[0] #transform to fractional coordinates
+    ax_hist.yaxis.set_label_coords(new_label_xcoord,ylabel_hist.get_position()[1])
+    ax_pull.yaxis.set_label_coords(new_label_xcoord,ylabel_pull.get_position()[1])
 
     plt.show()
 

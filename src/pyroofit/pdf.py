@@ -52,7 +52,8 @@ class PDF(ClassLoggingMixin, object):
 
     """
 
-    def __init__(self, name, observables=None, title=None, **kwds):
+    def __init__(self, name, observables=None, color=None, fill=False, hatch=False,
+     fill_alpha = 1.0, title=None, **kwds):
         """ Init of the PDF class
 
         Args:
@@ -97,6 +98,12 @@ class PDF(ClassLoggingMixin, object):
 
         #: int: Flag for the ROOT output
         self.print_level = -1
+
+        #plotting options
+        self.color = color
+        self.fill  = fill
+        self.hatch  = hash
+        self.fill_alpha = fill_alpha
 
     def __call__(self):
         """ Call overwrite
