@@ -18,7 +18,7 @@ import ROOT
 from .pdf import PDF
 from .utilities import AttrDict, is_iterable
 from .observables import create_roo_variable
-from .plotting import fast_plot
+from .plotting import fast_plot, py_plot
 from .data import df2roo
 
 
@@ -144,7 +144,7 @@ class AddPdf(PDF):
         # Check for duplicate names in pdfs
         for n, p in self.pdfs.items():
             if pdf.name == p.name:
-                self.logger.error("PDF with name %s already used, please choose unique names in" 
+                self.logger.error("PDF with name %s already used, please choose unique names in"
                                   " AddPdf to avoid errors with ROOT internal naming." % n)
                 return
 
@@ -220,10 +220,11 @@ class AddPdf(PDF):
                 if not pdf_name in components:
                     continue
                 sig_norm = self.norms[pdf_name]
-                add_components.append((pdf.roo_pdf, sig_norm.getVal()))
+                add_components.append((pdf, sig_norm))
             components = add_components
 
-        fast_plot(self.roo_pdf, data, observable, filename, components=components, *args, **kwargs)
+        #fast_plot(self.roo_pdf, data, observable, filename, components=components, *args, **kwargs)
+        py_plot(self.roo_pdf, data, observable, filename, components=components)
 
 
 class ProdPdf(PDF):
@@ -274,7 +275,7 @@ class ProdPdf(PDF):
         # Check for duplicate names in pdfs
         for n, p in self.pdfs.items():
             if pdf.name == p.name:
-                self.logger.error("PDF with name %s already used, please choose unique names in" 
+                self.logger.error("PDF with name %s already used, please choose unique names in"
                                   " AddPdf to avoid errors with ROOT internal naming." % n)
                 return
 

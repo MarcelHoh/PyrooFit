@@ -30,7 +30,7 @@ import ROOT
 
 from .utilities import ClassLoggingMixin, AttrDict
 from .data import df2roo
-from .plotting import fast_plot
+from .plotting import fast_plot, py_plot
 from .observables import create_roo_variable
 
 
@@ -305,7 +305,8 @@ class PDF(ClassLoggingMixin, object):
         """
         if data is None:
             data = self.last_data
-        fast_plot(self.roo_pdf, data, observable, filename, *args, **kwargs)
+        #fast_plot(self.roo_pdf, data, observable, filename, *args, **kwargs)
+        py_plot(self.roo_pdf, data, observable, filename)
 
     def _get_var(self, v, as_ufloat=False):
         """ Internal getter for parameter values

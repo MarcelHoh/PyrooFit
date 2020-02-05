@@ -33,6 +33,8 @@ from root_numpy import array2tree
 import ROOT
 import pandas as pd
 import numpy as np
+from uncertainties import ufloat
+from uncertainties import unumpy as unp
 
 
 def roo2hist(roo, binning, obs, name, observables=None):
@@ -176,3 +178,24 @@ def df2roo(df, observables=None, columns=None, name='data', weights=None, owners
         return roo2hist(df_roo, bins, roo_var_list[0], name, roo_argset)
 
     return df_roo
+
+def th12uarray(root_hist):
+    """ Converts a root TH1 histogram (TH1F, TH1D, etc...) to an uncertainties array
+    Args:
+        root_hist (ROOT.TH1):
+            input root histogram
+    Returns:
+        uncertainties array: ufloat array of bin contents ufloat(val, error)
+        bins: numpy array of bin edges
+    """
+    uarray = []
+    bin_edges = []
+    for i in range(root_hist.GetNbinsX()):
+        uarray.append(ufloat(root_hist.GetBinContent(i+1), root_hist.GetBinError(i+1)))
+        bin_edges.append(root_hist.GetBinLowEdge(i+1))
+        if i == root_hist.GetNbinsX()-1:
+            bin_edges.append(root_hist.GetBinLowEdge(i+1) + root_hist.GetBinWidth(i+1))
+
+    uarray = np.array(uarray)
+    bins = np.array(bin_edges)
+    return uarray, bins

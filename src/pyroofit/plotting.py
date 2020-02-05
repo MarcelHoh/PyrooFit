@@ -14,7 +14,17 @@ Todo:
 """
 from __future__ import print_function
 from .utilities import  ClassLoggingMixin
+from .data import th12uarray, roo2hist
 import ROOT
+
+import numpy as np
+import root_numpy
+from uncertainties import ufloat
+from uncertainties import unumpy as unp
+
+import matplotlib.pyplot as plt
+from matplotlib.ticker import NullFormatter
+import matplotlib
 
 DEFAULT_PALETTE = [1, ROOT.kRed - 7, ROOT.kAzure + 5, ROOT.kGreen-2,  ROOT.kMagenta+1, ROOT.kYellow]
 DEFAULT_STYLES = [0, 1001, 3004,  3005, 3009, 3006]
@@ -114,6 +124,148 @@ def set_root_style(font_scale=1.0, label_scale=1.0):
     ROOT.gStyle.SetLegendBorderSize(0)
 
 
+
+def py_plot(model, data, observable, filename, components=None, title = None,
+            nbins = None, round_bins = 5,
+            legend_kwargs = {}, figure_kwargs = {}, title_kwargs = {},
+            xlabel_kwargs = {}, pull_ylabel_kwargs = {}, ylabel_kwargs = {},
+            legend_data_name="Data", legend_fit_name="Fit"):
+    """ Generic plot function.
+
+    Args:
+        model (RooAbsPDF):
+            Fit model to be drawn
+        data (RooDataSet):
+            Dataset to be plotted
+        observable (RooAbsVar):
+            Observable to be drawn
+        filename (str):
+            Name of the output file. Suffix determines file type
+        nbins (int):
+            Number of bins
+        round_bins (int) :
+            magic to for automatically choosing the bin numbers
+        legend_kwargs (dict):
+            keyword arguments passed to the matplotlib.axes.Axes.legend instance
+        figure_kwargs (dict):
+            keyword arguments passed to the matplotlib.pyplot.figure instance
+        legend_data_name (str):
+            Name of the data part in the fit plot
+        legend_fit_name (str):
+            name of the total fit in the plot
+    """
+    nbins = get_optimal_bin_size(data.numEntries(), round_bins) if nbins is None else nbins
+
+    if isinstance(data, ROOT.RooDataHist):
+        nbins = observable.getBins()
+
+    #convert data to useable format for pyplot
+    if isinstance(data, ROOT.RooDataSet):
+        data  = roo2hist(data, nbins, observable, 'data_roo_hist')
+    data_root_hist = data.createHistogram('data_root_hist', observable)
+    data_uarray, bins = th12uarray(data_root_hist)
+
+    bins = np.array(bins)
+    bin_centers = (bins[:-1] + bins[1:])/2
+    bin_widths  = (bins[1:] - bins[:-1])
+
+    #### PLOTTING ####
+    # definitions for the axes - #TODO - make this an option
+    rect_hist = [0, 0.265, 1, 0.7]
+    rect_pull = [0, 0, 1, 0.235]
+
+    # start with a rectangular Figure
+    if 'figsize' not in figure_kwargs:
+        figure_kwargs['figsize'] = (5,5)
+    fig = plt.figure(**figure_kwargs)
+
+
+    ax_hist = plt.axes(rect_hist)
+    ax_pull = plt.axes(rect_pull, sharex=ax_hist)
+
+    # no labels for the hist plot
+    plt.setp(ax_hist.get_xticklabels(), visible=False)
+    #nullfmt = NullFormatter() # no labels
+    #ax_hist.xaxis.set_major_formatter(nullfmt)
+
+    legend_handles = []
+    legend_labels = []
+
+    data_plot = ax_hist.errorbar(bin_centers, unp.nominal_values(data_uarray),
+                                 yerr=unp.std_devs(data_uarray), xerr= bin_widths / 2,
+                                 color='black', fmt='.', capthick=0.0, lw=2.0)
+
+    legend_handles.append(data_plot)
+    legend_labels.append(legend_data_name)
+
+
+    npoints_curve = 10000
+    if components is not None:
+        for component, ni in components:
+            component.ni   = ufloat(ni.getVal(), ni.getError())
+            print(component.ni)
+            hx, hy = component.get_curve(observable.GetName(), npoints_curve)
+            hy    *= component.ni.n / nbins
+            component.plot = ax_hist.plot(hx, hy)
+
+            legend_handles.append(component.plot[0])
+            legend_labels.append(component.title)
+
+        print(np.sum([x.ni for x,y in components]))
+        print(data_uarray.sum())
+
+    #total pdf - essentially a copy paste from pdf.get_curve
+    h = model.createHistogram(observable.GetName(), npoints_curve)
+    total_hy, total_hx = root_numpy.hist2array(h, False, False, True)
+    total_hy = npoints_curve * total_hy / np.sum(total_hy)
+    total_hx = (total_hx[0][:-1] + total_hx[0][1:])/2.
+
+    #normalise to the sum of events in plot as per the roofit manual page 12
+    #Note that the normalization of the PDF, which has an intrinsic normalization to unity by definition, is automatically adjusted to the number of events in the plot.
+    total_hy = np.array(total_hy * data_uarray.sum().n )/ nbins
+    total_fit_plot = ax_hist.plot(total_hx, total_hy, color='black')
+    legend_handles.append(total_fit_plot[0])
+    legend_labels.append(legend_fit_name)
+
+    ax_hist.legend(legend_handles, legend_labels, **legend_kwargs)
+    ax_hist.set_ylim(bottom=0)
+    ax_hist.set_xlim(observable.getMin(), observable.getMax())
+
+    #calculate and plot the pull
+    pull = (unp.nominal_values(data_uarray) - np.interp(bin_centers, total_hx, total_hy)) / unp.std_devs(data_uarray)
+
+    fillBetweenBins = []
+    for i in range(len(bins)):
+        if ((i == 0) or (i==len(bins)-1)):
+            fillBetweenBins.append(bins[i])
+        else:
+            fillBetweenBins.append(bins[i])
+            fillBetweenBins.append(bins[i])
+    plt.axhline(0,color='grey', ls=':')
+    fillBetweenPlotSet = []
+    for i in range(len(pull)):
+        fillBetweenPlotSet.append(pull[i])
+        fillBetweenPlotSet.append(pull[i])
+
+    ax_pull.fill_between(fillBetweenBins, 0, fillBetweenPlotSet, facecolor='lightgray', alpha=1)
+    ax_pull.errorbar(bin_centers, pull, xerr= bin_widths/2, fmt='.',color='Black', lw=1.0, capthick = 0)#, xerr=binHalfWidths)
+    ax_pull.grid()
+    pull_low, pull_up = ax_pull.get_ylim()
+    if pull_low > -2: pull_low = -2
+    if pull_up  <  2: pull_up  =  2
+    ax_pull.set_ylim(pull_low, pull_up)
+
+    # Titles and labels
+    ax_hist.set_title(title,**title_kwargs)
+    ax_pull.set_xlabel(observable.GetTitle(), **xlabel_kwargs)#, ha='right', x=1.0)
+    ax_pull.set_ylabel('Pull', *pull_ylabel_kwargs)
+    ax_hist.set_ylabel('Events / %.4f' % min(bin_widths), **ylabel_kwargs)
+
+
+
+    plt.show()
+
+
 def fast_plot(model, data, observable, filename, components=None, nbins=None, extra_info=None,  size=1280,
               average=True, pi_label=False, font_scale=1.0, label_scale=1.0,
               legend=False, extra_text=None, round_bins=5, tick_len=30, model_range="Full",
@@ -169,10 +321,11 @@ def fast_plot(model, data, observable, filename, components=None, nbins=None, ex
     Todo:
         * Change or remove extra_info
     """
-    
+
     set_root_style(font_scale, label_scale)
 
     nbins = get_optimal_bin_size(data.numEntries(), round_bins) if nbins is None else nbins
+
     if isinstance(data, ROOT.RooDataHist):
         nbins = observable.getBins()
 
@@ -249,7 +402,7 @@ def fast_plot(model, data, observable, filename, components=None, nbins=None, ex
     frame.Draw()
     if legend is not False:
         leg.Draw("same")
-    
+
     # Draw Pull
     canvas.cd(2)
     pulls = frame.pullHist("Data", "Model", average)
