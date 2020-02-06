@@ -193,11 +193,12 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
                 #RooHistPDFs have intrinsic binning so need to treated differently
                 h = component.roo_pdf.createHistogram(observable.GetName(), npoints_curve)
                 hy, hx = th12uarray(h)
-                hy     = unp.nominal_values(hy)
+                hy     = np.array(unp.nominal_values(hy))
                 hy    /= hy.sum()
                 hx_centers = (hx[:-1] + hx[1:])/2
 
-                component.plot = ax_hist.hist(hx_centers, weights=hy * component.ni.n, bins=hx, color=component.color, **component.plot_kwargs)
+                component.plot = ax_hist.hist(hx_centers, weights=hy * component.ni.n, bins=hx,
+                                              histtype= 'step', color=component.color, **component.plot_kwargs)
 
                 if component.color == None:
                     component.color = component.plot[2][0].get_ec()
@@ -213,6 +214,8 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
                         component.edge_color = "None"
 
                     #want the bar shape of the histogram so adjust hx and hy
+                    print(len(hx), len(hy))
+
                     hx_new = []
                     for i in range(len(hx)):
                         if ((i == 0) or (i==len(hx)-1)):
@@ -220,12 +223,18 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
                         else:
                             hx_new.append(hx[i])
                             hx_new.append(hx[i])
+                    hx = hx_new
 
                     hy_new = []
                     for i in range(len(hy)):
                         hy_new.append(hy[i])
                         hy_new.append(hy[i])
                     hy = hy_new
+
+                    hy = np.array(hy)
+                    hx = np.array(hx)
+
+                    print(len(hx), len(hy))
 
                     component.fill_plot = ax_hist.fill_between(hx, np.zeros(len(hy)), hy * component.ni.n,
                     facecolor=component.face_color, edgecolor = component.edge_color,
@@ -271,13 +280,14 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
     #total pdf - essentially a copy paste from pdf.get_curve
     total_h = model.createHistogram(observable.GetName(), npoints_curve)
     if total_h.GetNbinsX() != npoints_curve: #model must have intrinsic binning
-        total_hy, total_hx = th12uarray(h)
+        total_hy, total_hx_bin_edges = th12uarray(total_h)
         total_hy     = unp.nominal_values(total_hy)
         total_hy    /= total_hy.sum()
-        total_hx_centers = (total_hx[:-1] + total_hx[1:])/2
+        total_hy    *= data_uarray.sum().n
+        total_hx     = (total_hx_bin_edges[:-1] + total_hx_bin_edges[1:])/2
 
-        total_fit_plot = ax_hist.hist(total_hx_centers, weights=total_hy * data_uarray.sum().n,
-                                      bins=total_hx, color=fit_color, histtype='step')
+        total_fit_plot = ax_hist.hist(total_hx, weights=total_hy,
+                                      bins=total_hx_bin_edges, color=fit_color, histtype='step')
         legend_handles.append(total_fit_plot[2][0])
 
     else:
