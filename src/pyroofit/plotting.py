@@ -104,18 +104,38 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
             Observable to be drawn
         filename (str):
             Name of the output file. Suffix determines file type
+        components (list(tuple(PDF, RooRealVar))):
+            input list of pdf components to be plotted (automatic for composite pdfs)
+        title (str):
+            title for plot
         nbins (int):
             Number of bins
-        round_bins (int) :
+        round_bins (int):
             magic to for automatically choosing the bin numbers
+        legend (bool):
+            bool to enable or disable plotting of the legend
         legend_kwargs (dict):
             keyword arguments passed to the matplotlib.axes.Axes.legend instance
         figure_kwargs (dict):
             keyword arguments passed to the matplotlib.pyplot.figure instance
+        title_kwargs (dict):
+            keyword arguments passed to the title
+        xlabel_kwargs (dict):
+            keyword arguments passed to the xlabel
+        ylabel_kwargs (dict):
+            keyword arguments passed to the ylabel
+        pull_ylabel_kwargs (dict):
+            keyword arguments passed to the ylabel of the pull
         legend_data_name (str):
             Name of the data part in the fit plot
         legend_fit_name (str):
             name of the total fit in the plot
+        fit_color (str):
+            color used to plot the fit line
+        data_color (str):
+            color used to plot the data
+        show (bool):
+            flag for plt.show() call
     """
 
     nbins = get_optimal_bin_size(data.numEntries(), round_bins) if nbins is None else nbins
@@ -164,10 +184,62 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
 
 
     npoints_curve = 10000
+
     if components is not None:
         for component, ni in components:
             component.ni   = ufloat(ni.getVal(), ni.getError())
-            print(component.ni)
+
+            if isinstance(component.roo_pdf, ROOT.RooHistPdf):
+                #RooHistPDFs have intrinsic binning so need to treated differently
+                h = component.roo_pdf.createHistogram(observable.GetName(), npoints_curve)
+                hy, hx = th12uarray(h)
+                hy     = unp.nominal_values(hy)
+                hy    /= hy.sum()
+                hx_centers = (hx[:-1] + hx[1:])/2
+
+                component.plot = ax_hist.hist(hx_centers, weights=hy * component.ni.n, bins=hx, color=component.color, **component.plot_kwargs)
+
+                if component.color == None:
+                    component.color = component.plot[2][0].get_ec()
+
+                if component.fill or component.hatch != False:
+                    component.face_color = component.color
+                    component.edge_color = component.color
+
+                    #alternative for hatch is a string (ex. '/') not True
+                    if component.hatch != False and not component.fill:
+                        component.face_color = "None"
+                    if component.hatch == False and component.fill:
+                        component.edge_color = "None"
+
+                    #want the bar shape of the histogram so adjust hx and hy
+                    hx_new = []
+                    for i in range(len(hx)):
+                        if ((i == 0) or (i==len(hx)-1)):
+                            hx_new.append(hx[i])
+                        else:
+                            hx_new.append(hx[i])
+                            hx_new.append(hx[i])
+
+                    hy_new = []
+                    for i in range(len(hy)):
+                        hy_new.append(hy[i])
+                        hy_new.append(hy[i])
+                    hy = hy_new
+
+                    component.fill_plot = ax_hist.fill_between(hx, np.zeros(len(hy)), hy * component.ni.n,
+                    facecolor=component.face_color, edgecolor = component.edge_color,
+                    alpha=component.fill_alpha, hatch=component.hatch, **component.fill_kwargs)
+                    legend_handles.append( (component.plot[2][0], component.fill_plot) )
+                else:
+                    legend_handles.append(component.plot[2][0])
+
+                legend_labels.append(component.title)
+
+                continue
+
+
+            #### all plots but hist
             hx, hy = component.get_curve(observable.GetName(), npoints_curve)
             hy    *= component.ni.n / nbins
 
@@ -197,16 +269,29 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
             legend_labels.append(component.title)
 
     #total pdf - essentially a copy paste from pdf.get_curve
-    h = model.createHistogram(observable.GetName(), npoints_curve)
-    total_hy, total_hx = root_numpy.hist2array(h, False, False, True)
-    total_hy = npoints_curve * total_hy / np.sum(total_hy)
-    total_hx = (total_hx[0][:-1] + total_hx[0][1:])/2.
+    total_h = model.createHistogram(observable.GetName(), npoints_curve)
+    if total_h.GetNbinsX() != npoints_curve: #model must have intrinsic binning
+        total_hy, total_hx = th12uarray(h)
+        total_hy     = unp.nominal_values(total_hy)
+        total_hy    /= total_hy.sum()
+        total_hx_centers = (total_hx[:-1] + total_hx[1:])/2
 
-    #normalise to the sum of events in plot as per the roofit manual page 12
-    #Note that the normalization of the PDF, which has an intrinsic normalization to unity by definition, is automatically adjusted to the number of events in the plot.
-    total_hy = np.array(total_hy * data_uarray.sum().n )/ nbins
-    total_fit_plot = ax_hist.plot(total_hx, total_hy, color=fit_color)
-    legend_handles.append(total_fit_plot[0])
+        total_fit_plot = ax_hist.hist(total_hx_centers, weights=total_hy * data_uarray.sum().n,
+                                      bins=total_hx, color=fit_color, histtype='step')
+        legend_handles.append(total_fit_plot[2][0])
+
+    else:
+        h = model.createHistogram(observable.GetName(), npoints_curve)
+        total_hy, total_hx = root_numpy.hist2array(h, False, False, True)
+        total_hy = npoints_curve * total_hy / np.sum(total_hy)
+        total_hx = (total_hx[0][:-1] + total_hx[0][1:])/2.
+
+        #normalise to the sum of events in plot as per the roofit manual page 12
+        #Note that the normalization of the PDF, which has an intrinsic normalization to unity by definition, is automatically adjusted to the number of events in the plot.
+        total_hy = np.array(total_hy * data_uarray.sum().n )/ nbins
+        total_fit_plot = ax_hist.plot(total_hx, total_hy, color=fit_color)
+        legend_handles.append(total_fit_plot[0])
+
     legend_labels.append(legend_fit_name)
 
     if legend:

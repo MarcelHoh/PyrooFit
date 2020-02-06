@@ -52,14 +52,22 @@ class PDF(ClassLoggingMixin, object):
 
     """
 
-    def __init__(self, name, observables=None, color=None, fill=False, hatch=False,
-     fill_alpha = 1.0, fill_kwargs = {}, plot_kwargs = {}, title=None, **kwds):
+    def __init__(self, name, observables=None, title=None, color=None, fill=False, hatch=False,
+     fill_alpha = 1.0, fill_kwargs = {}, plot_kwargs = {}, **kwds):
         """ Init of the PDF class
 
         Args:
             name (:obj:`str`): Name of the model
             observables (:obj:`list` of :obj:`ROOT.RooRealVar`, optional): Deprecated
             title (:obj:`str`): Title of the model
+
+            color (:obj:`str`): color used when plotting the pdf
+            fill  (:obj:`bool`): whether to fill below the pdf when plotting
+            hatch (:obj:`str`): hatching style, for no hatch use False
+            fill_alpha (:obj:`float`): alpha passed to fill_between
+            plot_kwargs (:obj:`dict`): kwargs passed to the pyplot.plot() function
+            fill_kwargs (:obj:`dict`): kwargs passed to the pyplot.fill_between() function
+
             **kwds: >> May be removed
 
         """

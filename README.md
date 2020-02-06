@@ -3,7 +3,7 @@ PyrooFit
 
 PyrooFit is a fit framework for python and pandas DataFrames on top of the ROOT.RooFit package developed by @simonUU.
 
-The package allows for simple fits of standard PDFs and easy setup of custom PDFs in one or more fit dimensions. This fork replaces the default root style plotting with matplotlib passed python plotting.
+The package allows for simple fits of standard PDFs and easy setup of custom PDFs in one or more fit dimensions. This fork replaces the default root style plotting with python matplotlib based plotting.
 
 Example
 -------
@@ -69,7 +69,7 @@ All parameters and observables can also be initialised by a `ROOT.RooRealVar`.
 Styling
 ============
 
-The styling is deliberately left to a minimum to allow users to use their own style files. It is recommended to use a stylesheet like those provided by matplotlib or within !(b2plot)[https://github.com/simonUU/b2plot] (also by @simunUU).
+The styling is deliberately left to a minimum to allow users to use their own style files. It is recommended to use a stylesheet like those provided by matplotlib or within [b2plot](https://github.com/simonUU/b2plot) (also by @simunUU).
 
 In addition to the styling performed by the stylesheet or modifying `rcParams` there are simple options for `fill`, `hatch` and `color` attached to each pdf and each element of the plot can be individually edited by supplying a dictionary of keyword arguments. For example:
 
@@ -101,7 +101,7 @@ pdf.plot('example_sig_bkg_2.pdf',
 pdf.get()
 
 ```
-<img src="http://desy.de/~hohmann/example_sig_bkg_2.png" width="400" height="400">
+<img src="http://desy.de/~hohmann/example_sig_bkg_2.png" width="400" height="400" alt="use this one">
 <img src="http://desy.de/~hohmann/example_sig_bkg_3.png" width="400" height="400">
 <img src="http://desy.de/~hohmann/example_sig_bkg_4.png" width="400" height="400">
 
