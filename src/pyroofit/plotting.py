@@ -138,6 +138,30 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
             flag for plt.show() call
     """
 
+
+    def convert_x_y_to_hist(hx, hy):
+        """ need to double up hx and hy points to add the vertical lines of a histogram
+            for fill_between() or to plot histograms with plot()
+            ex. hist of bins [0,1,2] with entries [1,2] is defined by [(0,1), (1,1), (1,2), (2,2)]
+
+            TODO: this should be doable with numpy or zipping lists together
+        """
+        hx_new = []
+        for i in range(len(hx)):
+            if ((i == 0) or (i==len(hx)-1)):
+                hx_new.append(hx[i])
+            else:
+                hx_new.append(hx[i])
+                hx_new.append(hx[i])
+
+        hy_new = []
+        for i in range(len(hy)):
+            hy_new.append(hy[i])
+            hy_new.append(hy[i])
+
+        return np.array(hx_new), np.array(hy_new)
+
+
     nbins = get_optimal_bin_size(data.numEntries(), round_bins) if nbins is None else nbins
 
     if isinstance(data, ROOT.RooDataHist):
@@ -150,8 +174,8 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
     data_uarray, bins = th12uarray(data_root_hist)
 
     bins = np.array(bins)
-    bin_centers = (bins[:-1] + bins[1:])/2
-    bin_widths  = (bins[1:] - bins[:-1])
+    bin_centers = (bins[ :-1] + bins[1:  ])/2
+    bin_widths  = (bins[1:  ] - bins[ :-1])
 
     #### PLOTTING ####
     # definitions for the axes - #TODO - make this an option
@@ -189,69 +213,25 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
         for component, ni in components:
             component.ni   = ufloat(ni.getVal(), ni.getError())
 
-            if isinstance(component.roo_pdf, ROOT.RooHistPdf):
-                #RooHistPDFs have intrinsic binning so need to treated differently
-                h = component.roo_pdf.createHistogram(observable.GetName(), npoints_curve)
-                hy, hx = th12uarray(h)
-                hy     = np.array(unp.nominal_values(hy))
-                hy    /= hy.sum()
-                hx_centers = (hx[:-1] + hx[1:])/2
-
-                component.plot = ax_hist.hist(hx_centers, weights=hy * component.ni.n, bins=hx,
-                                              histtype= 'step', color=component.color, **component.plot_kwargs)
-
-                if component.color == None:
-                    component.color = component.plot[2][0].get_ec()
-
-                if component.fill or component.hatch != False:
-                    component.face_color = component.color
-                    component.edge_color = component.color
-
-                    #alternative for hatch is a string (ex. '/') not True
-                    if component.hatch != False and not component.fill:
-                        component.face_color = "None"
-                    if component.hatch == False and component.fill:
-                        component.edge_color = "None"
-
-                    #want the bar shape of the histogram so adjust hx and hy
-                    print(len(hx), len(hy))
-
-                    hx_new = []
-                    for i in range(len(hx)):
-                        if ((i == 0) or (i==len(hx)-1)):
-                            hx_new.append(hx[i])
-                        else:
-                            hx_new.append(hx[i])
-                            hx_new.append(hx[i])
-                    hx = hx_new
-
-                    hy_new = []
-                    for i in range(len(hy)):
-                        hy_new.append(hy[i])
-                        hy_new.append(hy[i])
-                    hy = hy_new
-
-                    hy = np.array(hy)
-                    hx = np.array(hx)
-
-                    print(len(hx), len(hy))
-
-                    component.fill_plot = ax_hist.fill_between(hx, np.zeros(len(hy)), hy * component.ni.n,
-                    facecolor=component.face_color, edgecolor = component.edge_color,
-                    alpha=component.fill_alpha, hatch=component.hatch, **component.fill_kwargs)
-                    legend_handles.append( (component.plot[2][0], component.fill_plot) )
-                else:
-                    legend_handles.append(component.plot[2][0])
-
-                legend_labels.append(component.title)
-
-                continue
-
-
-            #### all plots but hist
             hx, hy = component.get_curve(observable.GetName(), npoints_curve)
             hy    *= component.ni.n / nbins
 
+            # some pdfs have intrinsic binning (only RooHistPdf ??) and need special treatment
+            # TODO find better check for intrinsic binning, how does RooFit do this internally?
+            if (len(hy) != npoints_curve) or (isinstance(component.roo_pdf, ROOT.RooHistPdf)):
+                #RooHistPDFs have intrinsic binning so need to treated differently
+                h = component.roo_pdf.createHistogram(observable.GetName(), npoints_curve)
+                hy, hx = th12uarray(h)
+                nbins_component = len(hy)
+                hx, hy = convert_x_y_to_hist(hx, hy)
+                hy     = np.array(unp.nominal_values(hy))
+                #normalise and potentially correct for having different binning to data
+                hy    *= component.ni.n / hy.sum()
+                hy    *= nbins_component / nbins
+                hx_centers = (hx[:-1] + hx[1:])/2
+
+
+            #### all plots but hist
             component.plot = ax_hist.plot(hx, hy, color=component.color, **component.plot_kwargs)
             component.fill_plot = None
 
@@ -281,27 +261,33 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
     total_h = model.createHistogram(observable.GetName(), npoints_curve)
     if total_h.GetNbinsX() != npoints_curve: #model must have intrinsic binning
         total_hy, total_hx_bin_edges = th12uarray(total_h)
-        total_hy     = unp.nominal_values(total_hy)
-        total_hy    /= total_hy.sum()
-        total_hy    *= data_uarray.sum().n
-        total_hx     = (total_hx_bin_edges[:-1] + total_hx_bin_edges[1:])/2
+        total_hx  = (total_hx_bin_edges[:-1] + total_hx_bin_edges[1:])/2
 
-        total_fit_plot = ax_hist.hist(total_hx, weights=total_hy,
-                                      bins=total_hx_bin_edges, color=fit_color, histtype='step')
-        legend_handles.append(total_fit_plot[2][0])
+        total_hy     = unp.nominal_values(total_hy)
+        total_hy    *= data_uarray.sum().n / total_hy.sum()
+        total_hy    *= len(total_hy) / nbins
+
+        total_hy_pull = total_hy
+        total_hx_pull = total_hx
+
+        total_hx, total_hy = convert_x_y_to_hist(total_hx_bin_edges, total_hy)
 
     else:
         h = model.createHistogram(observable.GetName(), npoints_curve)
         total_hy, total_hx = root_numpy.hist2array(h, False, False, True)
-        total_hy = npoints_curve * total_hy / np.sum(total_hy)
         total_hx = (total_hx[0][:-1] + total_hx[0][1:])/2.
 
         #normalise to the sum of events in plot as per the roofit manual page 12
         #Note that the normalization of the PDF, which has an intrinsic normalization to unity by definition, is automatically adjusted to the number of events in the plot.
+        total_hy = npoints_curve * total_hy / np.sum(total_hy)
         total_hy = np.array(total_hy * data_uarray.sum().n )/ nbins
-        total_fit_plot = ax_hist.plot(total_hx, total_hy, color=fit_color)
-        legend_handles.append(total_fit_plot[0])
 
+        total_hy_pull = total_hy
+        total_hx_pull = total_hx
+
+
+    total_fit_plot = ax_hist.plot(total_hx, total_hy, color=fit_color)
+    legend_handles.append(total_fit_plot[0])
     legend_labels.append(legend_fit_name)
 
     if legend:
@@ -312,23 +298,11 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
     ax_hist.set_xlim(observable.getMin(), observable.getMax())
 
     #calculate and plot the pull
-    pull = (unp.nominal_values(data_uarray) - np.interp(bin_centers, total_hx, total_hy)) / unp.std_devs(data_uarray)
-
-    fillBetweenBins = []
-    for i in range(len(bins)):
-        if ((i == 0) or (i==len(bins)-1)):
-            fillBetweenBins.append(bins[i])
-        else:
-            fillBetweenBins.append(bins[i])
-            fillBetweenBins.append(bins[i])
+    pull = (unp.nominal_values(data_uarray) - np.interp(bin_centers, total_hx_pull, total_hy_pull)) / unp.std_devs(data_uarray)
+    bins_fill, pull_fill = convert_x_y_to_hist(bins, pull)
 
     plt.axhline(0,color='gray', ls=':')
-    fillBetweenPlotSet = []
-    for i in range(len(pull)):
-        fillBetweenPlotSet.append(pull[i])
-        fillBetweenPlotSet.append(pull[i])
-
-    ax_pull.fill_between(fillBetweenBins, 0, fillBetweenPlotSet, facecolor='lightgray', edgecolor='lightgray', alpha=1)
+    ax_pull.fill_between(bins_fill, 0, pull_fill, facecolor='lightgray', edgecolor='lightgray', alpha=1)
     ax_pull.errorbar(bin_centers, pull, xerr= bin_widths/2, fmt='.',color='Black', lw=1.0, capthick = 0)#, xerr=binHalfWidths)
     ax_pull.grid()
 
