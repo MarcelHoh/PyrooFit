@@ -223,11 +223,11 @@ def py_plot(model, data, observable, filename=None, components=None, title = Non
                 h = component.roo_pdf.createHistogram(observable.GetName(), npoints_curve)
                 hy, hx = th12uarray(h)
                 nbins_component = len(hy)
-                hx, hy = convert_x_y_to_hist(hx, hy)
-                hy     = np.array(unp.nominal_values(hy))
                 #normalise and potentially correct for having different binning to data
                 hy    *= component.ni.n / hy.sum()
                 hy    *= nbins_component / nbins
+                hx, hy = convert_x_y_to_hist(hx, hy)
+                hy     = np.array(unp.nominal_values(hy))
                 hx_centers = (hx[:-1] + hx[1:])/2
 
 
