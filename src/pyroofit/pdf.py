@@ -53,7 +53,7 @@ class PDF(ClassLoggingMixin, object):
     """
 
     def __init__(self, name, observables=None, title=None, color=None, fill=False, hatch=False,
-     fill_alpha = 1.0, fill_kwargs = {}, plot_kwargs = {}, **kwds):
+     fill_alpha = 0.3, fill_kwargs = {}, plot_kwargs = {}, **kwds):
         """ Init of the PDF class
 
         Args:

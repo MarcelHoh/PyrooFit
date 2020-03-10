@@ -305,24 +305,40 @@ class HistPDF(PDF):
     '''
     def __init__(self,
                  observable,
-                 df,
-                 nbins,
+                 data,
+                 bins=None,
                  weights=None,
                  name='histPDF',
+                 get_fit_data_keywords={},
                  *args,
-                 **kwds):
+                 **kwd):
         super(HistPDF, self).__init__(name=name, **kwds)
 
         self.add_observable(observable)
 
         # Data must be binned to fit a RooHistPdf
-        assert isinstance(nbins, int), self.logger.error("nbins must be integer")
-        self.last_data = self.get_fit_data(df, weights=weights, nbins=nbins, *args, **kwds)
+        if isinstance(data, pd.DataFrame) and isinstance(bins, int):
+        #assert isinstance(bins, int), self.logger.error("nbins must be integer")
+            self.last_data = self.get_fit_data(df, weights=weights, nbins=bins, *args, **get_fit_data_keywords)
 
-        self.roo_pdf = ROOT.RooHistPdf(self.name,
-                                       self.title,
-                                       ROOT.RooArgSet(next(iter(self.observables.values()))),
-                                       self.last_data)
+            self.roo_pdf = ROOT.RooHistPdf(self.name,
+                                           self.title,
+                                           ROOT.RooArgSet(next(iter(self.observables.values()))),
+                                           self.last_data)
+
+        if isinstance(data, ROOT.RooDataHist) or isinstance(data, ROOT.TH1):
+
+            if isinstance(data, ROOT.TH1):
+                data = ROOT.RooDataHist(data.GetName()  + '_rooDataHist',
+                                        data.GetTitle() + '_rooDataHist',
+                                        ROOT.RooArgSet(next(iter(self.observables.values()))),
+                                        data)
+
+            self.roo_pdf = ROOT.RooHistPdf(self.name,
+                                           self.title,
+                                           ROOT.RooArgSet(next(iter(self.observables.values()))),
+                                           data)
+
 
 
 class DstD0BG(PDF):

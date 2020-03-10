@@ -35,6 +35,7 @@ import pandas as pd
 import numpy as np
 from uncertainties import ufloat
 from uncertainties import unumpy as unp
+from array import array
 
 
 def roo2hist(roo, binning, obs, name, observables=None):
@@ -199,3 +200,29 @@ def th12uarray(root_hist):
     uarray = np.array(uarray)
     bins = np.array(bin_edges)
     return uarray, bins
+
+def uarray2th1(uarray, bins, name, title=None):
+    """
+        converts a ufloat array of bin content and a list of bin edges to a TH1D histogram
+        Args:
+            uarray (array of uncertainties.ufloat):
+                input bin content with errors
+            bins (list):
+                input list of bin edges
+            name:
+                input name used in TH1 name parameter
+            title:
+                input title used in TH1 title parameter. If None then the name is used.
+
+        Returns:
+            ROOT.TH1D histogram
+    """
+    if title == None: title = name
+
+    root_hist = ROOT.TH1D(name, title, len(bins)-1, array('d', bins))
+
+    for i in range(len(bins)-1):
+        root_hist.SetBinContent(i+1, uarray[i].n)
+        root_hist.SetBinError(i+1  , uarray[i].s)
+
+    return root_hist
